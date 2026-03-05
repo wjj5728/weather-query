@@ -58,6 +58,7 @@ export default function Home() {
   const [data, setData] = useState<WeatherResult | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>([]);
+  const [compare, setCompare] = useState<WeatherResult[]>([]);
 
   useEffect(() => {
     const f = localStorage.getItem(FAV_KEY);
@@ -76,7 +77,7 @@ export default function Home() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   }
 
-  async function queryWeather(targetCity: string) {
+  async function queryWeather(targetCity: string, options?: { addCompare?: boolean }) {
     setLoading(true);
     setError("");
 
@@ -88,7 +89,17 @@ export default function Home() {
         setData(null);
         return;
       }
-      setData(json);
+
+      const weather = json as WeatherResult;
+
+      if (options?.addCompare) {
+        setCompare((prev) => {
+          const dedup = [weather, ...prev.filter((x) => x.city !== weather.city)];
+          return dedup.slice(0, 3);
+        });
+      } else {
+        setData(weather);
+      }
 
       const nextHistory = [targetCity, ...history.filter((x) => x !== targetCity)].slice(0, 8);
       persistHistory(nextHistory);
@@ -116,18 +127,36 @@ export default function Home() {
     persistFav(favorites.filter((x) => x !== item));
   }
 
+  function exportSnapshot() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      current: data,
+      compare,
+      favorites,
+      history,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `weather-snapshot-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
-      <main className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">天气查询 v0.4.0</h1>
-        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气 + 未来 7 天预报，支持收藏/历史、超时提示与防刷限流</p>
+      <main className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold">天气查询 v0.5.0</h1>
+        <p className="mt-1 text-sm text-slate-500">支持多城市对比（最多3个）与天气快照导出（JSON）</p>
 
-        <form onSubmit={onSubmit} className="mt-5 flex gap-3">
+        <form onSubmit={onSubmit} className="mt-5 flex flex-wrap gap-3">
           <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
             placeholder="例如：厦门"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-600"
+            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-600"
           />
           <button
             type="submit"
@@ -136,12 +165,18 @@ export default function Home() {
           >
             {loading ? "查询中..." : "查询"}
           </button>
+          <button type="button" onClick={addFavorite} className="rounded-lg border border-slate-300 px-4 py-2">
+            收藏
+          </button>
           <button
             type="button"
-            onClick={addFavorite}
+            onClick={() => void queryWeather(city, { addCompare: true })}
             className="rounded-lg border border-slate-300 px-4 py-2"
           >
-            收藏
+            加入对比
+          </button>
+          <button type="button" onClick={exportSnapshot} className="rounded-lg border border-slate-300 px-4 py-2">
+            导出快照
           </button>
         </form>
 
@@ -235,6 +270,20 @@ export default function Home() {
               {data.forecast.map((item) => (
                 <div key={item.date} className="rounded-lg bg-slate-100 p-3">
                   {item.date}：最高 {item.max}°C / 最低 {item.min}°C
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {compare.length > 0 ? (
+          <section className="mt-6 rounded-xl border border-slate-200 p-4">
+            <h3 className="text-lg font-semibold">多城市对比</h3>
+            <div className="mt-3 grid gap-2 text-sm">
+              {compare.map((item) => (
+                <div key={`${item.city}-${item.current.time}`} className="rounded-lg bg-slate-100 p-3">
+                  {item.city}{item.country ? `, ${item.country}` : ""}：
+                  温度 {item.current.temperature}°C，体感 {item.current.feelsLike}°C，湿度 {item.current.humidity}% ，风速 {item.current.windSpeed} km/h
                 </div>
               ))}
             </div>
