@@ -119,8 +119,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
       <main className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">天气查询 v0.3.0</h1>
-        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气 + 未来 7 天预报，支持收藏与查询历史</p>
+        <h1 className="text-2xl font-bold">天气查询 v0.4.0</h1>
+        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气 + 未来 7 天预报，支持收藏/历史、超时提示与防刷限流</p>
 
         <form onSubmit={onSubmit} className="mt-5 flex gap-3">
           <input
@@ -190,6 +190,24 @@ export default function Home() {
             >
               重试
             </button>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="mt-6 rounded-xl border border-slate-200 p-4">
+            <div className="h-6 w-48 animate-pulse rounded bg-slate-200" />
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="h-10 animate-pulse rounded bg-slate-100" />
+              <div className="h-10 animate-pulse rounded bg-slate-100" />
+              <div className="h-10 animate-pulse rounded bg-slate-100" />
+              <div className="h-10 animate-pulse rounded bg-slate-100" />
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && !data && !error ? (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            请输入城市开始查询，例如：厦门、上海、北京。
           </div>
         ) : null}
 
