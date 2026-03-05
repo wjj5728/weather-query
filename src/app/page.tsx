@@ -59,6 +59,7 @@ export default function Home() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>([]);
   const [compare, setCompare] = useState<WeatherResult[]>([]);
+  const [compareSortBy, setCompareSortBy] = useState<"temperature" | "feelsLike">("temperature");
 
   useEffect(() => {
     const f = localStorage.getItem(FAV_KEY);
@@ -145,11 +146,46 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  function exportSnapshotCsv() {
+    const rows = [
+      ["city", "country", "temperature", "feelsLike", "humidity", "windSpeed", "time"],
+      ...(data
+        ? [[
+            data.city,
+            data.country,
+            String(data.current.temperature),
+            String(data.current.feelsLike),
+            String(data.current.humidity),
+            String(data.current.windSpeed),
+            data.current.time,
+          ]]
+        : []),
+      ...compare.map((item) => [
+        item.city,
+        item.country,
+        String(item.current.temperature),
+        String(item.current.feelsLike),
+        String(item.current.humidity),
+        String(item.current.windSpeed),
+        item.current.time,
+      ]),
+    ];
+
+    const csv = rows.map((r) => r.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n");
+    const blob = new Blob([`${csv}\n`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `weather-snapshot-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
       <main className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">天气查询 v0.5.0</h1>
-        <p className="mt-1 text-sm text-slate-500">支持多城市对比（最多3个）与天气快照导出（JSON）</p>
+        <h1 className="text-2xl font-bold">天气查询 v0.6.0</h1>
+        <p className="mt-1 text-sm text-slate-500">支持多城市对比排序、历史/对比一键清空、天气快照 JSON/CSV 导出</p>
 
         <form onSubmit={onSubmit} className="mt-5 flex flex-wrap gap-3">
           <input
@@ -176,7 +212,10 @@ export default function Home() {
             加入对比
           </button>
           <button type="button" onClick={exportSnapshot} className="rounded-lg border border-slate-300 px-4 py-2">
-            导出快照
+            导出 JSON
+          </button>
+          <button type="button" onClick={exportSnapshotCsv} className="rounded-lg border border-slate-300 px-4 py-2">
+            导出 CSV
           </button>
         </form>
 
@@ -196,7 +235,16 @@ export default function Home() {
 
         {history.length > 0 ? (
           <div className="mt-4">
-            <p className="mb-2 text-sm font-semibold">最近查询</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold">最近查询</p>
+              <button
+                type="button"
+                onClick={() => persistHistory([])}
+                className="rounded border border-slate-300 px-2 py-1 text-xs"
+              >
+                清空历史
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {history.map((item) => (
                 <button
@@ -278,14 +326,42 @@ export default function Home() {
 
         {compare.length > 0 ? (
           <section className="mt-6 rounded-xl border border-slate-200 p-4">
-            <h3 className="text-lg font-semibold">多城市对比</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold">多城市对比</h3>
+              <div className="flex items-center gap-2 text-xs">
+                <span>排序：</span>
+                <button
+                  type="button"
+                  onClick={() => setCompareSortBy("temperature")}
+                  className="rounded border border-slate-300 px-2 py-1"
+                >
+                  按温度
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompareSortBy("feelsLike")}
+                  className="rounded border border-slate-300 px-2 py-1"
+                >
+                  按体感
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompare([])}
+                  className="rounded border border-slate-300 px-2 py-1"
+                >
+                  清空对比
+                </button>
+              </div>
+            </div>
             <div className="mt-3 grid gap-2 text-sm">
-              {compare.map((item) => (
-                <div key={`${item.city}-${item.current.time}`} className="rounded-lg bg-slate-100 p-3">
-                  {item.city}{item.country ? `, ${item.country}` : ""}：
-                  温度 {item.current.temperature}°C，体感 {item.current.feelsLike}°C，湿度 {item.current.humidity}% ，风速 {item.current.windSpeed} km/h
-                </div>
-              ))}
+              {[...compare]
+                .sort((a, b) => b.current[compareSortBy] - a.current[compareSortBy])
+                .map((item) => (
+                  <div key={`${item.city}-${item.current.time}`} className="rounded-lg bg-slate-100 p-3">
+                    {item.city}{item.country ? `, ${item.country}` : ""}：
+                    温度 {item.current.temperature}°C，体感 {item.current.feelsLike}°C，湿度 {item.current.humidity}% ，风速 {item.current.windSpeed} km/h
+                  </div>
+                ))}
             </div>
           </section>
         ) : null}
