@@ -7,6 +7,12 @@ type GeoItem = {
   longitude: number;
 };
 
+type WeatherDaily = {
+  time: string[];
+  temperature_2m_max: number[];
+  temperature_2m_min: number[];
+};
+
 export async function GET(req: NextRequest) {
   const city = req.nextUrl.searchParams.get("city")?.trim();
   if (!city) {
@@ -29,7 +35,7 @@ export async function GET(req: NextRequest) {
     }
 
     const weatherRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${hit.latitude}&longitude=${hit.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m&timezone=Asia%2FShanghai`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${hit.latitude}&longitude=${hit.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&forecast_days=7&timezone=Asia%2FShanghai`,
       { cache: "no-store" }
     );
 
@@ -37,8 +43,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "天气请求失败" }, { status: 502 });
     }
 
-    const weatherJson = await weatherRes.json();
+    const weatherJson = (await weatherRes.json()) as {
+      current?: {
+        temperature_2m?: number;
+        relative_humidity_2m?: number;
+        apparent_temperature?: number;
+        wind_speed_10m?: number;
+        time?: string;
+      };
+      daily?: WeatherDaily;
+    };
+
     const current = weatherJson.current;
+    const daily = weatherJson.daily;
+
+    const forecast = (daily?.time || []).map((date, idx) => ({
+      date,
+      max: daily?.temperature_2m_max?.[idx],
+      min: daily?.temperature_2m_min?.[idx],
+    }));
 
     return NextResponse.json({
       city: hit.name,
@@ -52,6 +75,7 @@ export async function GET(req: NextRequest) {
         windSpeed: current?.wind_speed_10m,
         time: current?.time,
       },
+      forecast,
     });
   } catch {
     return NextResponse.json({ error: "服务异常" }, { status: 500 });

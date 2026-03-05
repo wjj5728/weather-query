@@ -1,6 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
+
+type ForecastItem = {
+  date: string;
+  max: number;
+  min: number;
+};
 
 type WeatherResult = {
   city: string;
@@ -14,7 +20,33 @@ type WeatherResult = {
     windSpeed: number;
     time: string;
   };
+  forecast: ForecastItem[];
 };
+
+function TempTrend({ forecast }: { forecast: ForecastItem[] }) {
+  const points = useMemo(() => {
+    if (!forecast.length) return "";
+    const width = 520;
+    const height = 140;
+    const maxVal = Math.max(...forecast.map((x) => x.max));
+    const minVal = Math.min(...forecast.map((x) => x.min));
+    const range = Math.max(1, maxVal - minVal);
+
+    return forecast
+      .map((item, idx) => {
+        const x = (idx / Math.max(1, forecast.length - 1)) * width;
+        const y = height - ((item.max - minVal) / range) * height;
+        return `${x},${y}`;
+      })
+      .join(" ");
+  }, [forecast]);
+
+  return (
+    <svg viewBox="0 0 520 140" className="h-36 w-full rounded-lg bg-slate-100 p-2">
+      <polyline points={points} fill="none" stroke="#0f172a" strokeWidth="3" />
+    </svg>
+  );
+}
 
 export default function Home() {
   const [city, setCity] = useState("厦门");
@@ -46,9 +78,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
-      <main className="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">天气查询 v0.1.0</h1>
-        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气（温度、体感、湿度、风速）</p>
+      <main className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold">天气查询 v0.2.0</h1>
+        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气 + 未来 7 天预报与温度趋势图</p>
 
         <form onSubmit={onSubmit} className="mt-5 flex gap-3">
           <input
@@ -78,6 +110,19 @@ export default function Home() {
               <div className="rounded-lg bg-slate-100 p-3">体感：{data.current.feelsLike}°C</div>
               <div className="rounded-lg bg-slate-100 p-3">湿度：{data.current.humidity}%</div>
               <div className="rounded-lg bg-slate-100 p-3">风速：{data.current.windSpeed} km/h</div>
+            </div>
+
+            <h3 className="mt-6 text-lg font-semibold">未来 7 天温度趋势（最高温）</h3>
+            <div className="mt-3">
+              <TempTrend forecast={data.forecast} />
+            </div>
+
+            <div className="mt-4 grid gap-2 text-sm">
+              {data.forecast.map((item) => (
+                <div key={item.date} className="rounded-lg bg-slate-100 p-3">
+                  {item.date}：最高 {item.max}°C / 最低 {item.min}°C
+                </div>
+              ))}
             </div>
           </section>
         ) : null}
