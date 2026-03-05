@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type ForecastItem = {
   date: string;
@@ -22,6 +22,9 @@ type WeatherResult = {
   };
   forecast: ForecastItem[];
 };
+
+const FAV_KEY = "weather-favorites";
+const HISTORY_KEY = "weather-history";
 
 function TempTrend({ forecast }: { forecast: ForecastItem[] }) {
   const points = useMemo(() => {
@@ -53,14 +56,32 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState<WeatherResult | null>(null);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    const f = localStorage.getItem(FAV_KEY);
+    const h = localStorage.getItem(HISTORY_KEY);
+    if (f) setFavorites(JSON.parse(f));
+    if (h) setHistory(JSON.parse(h));
+  }, []);
+
+  function persistFav(next: string[]) {
+    setFavorites(next);
+    localStorage.setItem(FAV_KEY, JSON.stringify(next));
+  }
+
+  function persistHistory(next: string[]) {
+    setHistory(next);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  }
+
+  async function queryWeather(targetCity: string) {
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+      const res = await fetch(`/api/weather?city=${encodeURIComponent(targetCity)}`);
       const json = await res.json();
       if (!res.ok) {
         setError(json.error || "查询失败");
@@ -68,6 +89,9 @@ export default function Home() {
         return;
       }
       setData(json);
+
+      const nextHistory = [targetCity, ...history.filter((x) => x !== targetCity)].slice(0, 8);
+      persistHistory(nextHistory);
     } catch {
       setError("网络异常，请稍后重试");
       setData(null);
@@ -76,11 +100,27 @@ export default function Home() {
     }
   }
 
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    await queryWeather(city);
+  }
+
+  function addFavorite() {
+    const key = city.trim();
+    if (!key) return;
+    if (favorites.includes(key)) return;
+    persistFav([key, ...favorites].slice(0, 8));
+  }
+
+  function removeFavorite(item: string) {
+    persistFav(favorites.filter((x) => x !== item));
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900">
       <main className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">天气查询 v0.2.0</h1>
-        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气 + 未来 7 天预报与温度趋势图</p>
+        <h1 className="text-2xl font-bold">天气查询 v0.3.0</h1>
+        <p className="mt-1 text-sm text-slate-500">输入城市名，查看当前天气 + 未来 7 天预报，支持收藏与查询历史</p>
 
         <form onSubmit={onSubmit} className="mt-5 flex gap-3">
           <input
@@ -96,13 +136,69 @@ export default function Home() {
           >
             {loading ? "查询中..." : "查询"}
           </button>
+          <button
+            type="button"
+            onClick={addFavorite}
+            className="rounded-lg border border-slate-300 px-4 py-2"
+          >
+            收藏
+          </button>
         </form>
 
-        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+        {favorites.length > 0 ? (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-semibold">收藏城市</p>
+            <div className="flex flex-wrap gap-2">
+              {favorites.map((item) => (
+                <div key={item} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm">
+                  <button type="button" onClick={() => { setCity(item); void queryWeather(item); }}>{item}</button>
+                  <button type="button" onClick={() => removeFavorite(item)} className="text-slate-500">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {history.length > 0 ? (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-semibold">最近查询</p>
+            <div className="flex flex-wrap gap-2">
+              {history.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    setCity(item);
+                    void queryWeather(item);
+                  }}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-sm"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => void queryWeather(city)}
+              className="mt-2 rounded border border-red-300 px-3 py-1 text-xs"
+            >
+              重试
+            </button>
+          </div>
+        ) : null}
 
         {data ? (
           <section className="mt-6 rounded-xl border border-slate-200 p-4">
-            <h2 className="text-xl font-semibold">{data.city}{data.country ? `, ${data.country}` : ""}</h2>
+            <h2 className="text-xl font-semibold">
+              {data.city}
+              {data.country ? `, ${data.country}` : ""}
+            </h2>
             <p className="mt-2 text-sm text-slate-500">更新时间：{data.current.time}</p>
 
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
